@@ -1,0 +1,85 @@
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/queue.h>
+
+
+#define cast(t, v)	((t)(v))
+#define hash(t)	(t->vec)
+#define key(n)	(n->key)
+#define cdata(n)	(n->data)
+#define len(t)	(t->len)
+#define	getPos(k, t)	(key(k) % len(t))
+
+typedef	uint32_t Natural;
+
+typedef struct Node{
+	Natural key;
+	void	*data;
+	SLIST_ENTRY(Node)	sibl;
+}		Node;
+
+typedef struct Table{
+	SLIST_HEAD(coalescedEntries, Node)	*vec;
+	size_t	len;
+	size_t	cnt;
+}	Table;
+
+Table *newTable(size_t len)
+{
+	Table *t;
+
+	t = malloc(sizeof(Table));
+	bzero(t, sizeof(Table));
+	t->len = len;
+	t->cnt = 0;
+	hash(t) = malloc(len * sizeof(*hash(t)));
+	bzero(hash(t), sizeof(len(t) * *hash(t)));
+	return (t);
+}
+
+Natural Hash(char *str, size_t len, Natural seed)
+{
+	Natural hash = seed;
+
+	for (int i = 0; i < len; i++)
+		hash ^= str[i] + (hash << 5 ^ hash >> 2);
+	return (hash);
+}
+
+Natural	InsertIntoTable(Table *t, Node *kv)
+{
+	Natural	h;
+
+	h = getPos(kv, t);
+	SLIST_INSERT_HEAD(hash(t)[h], kv, sibl);
+	return (h);
+}
+
+Node *lookupIntoTable(Table *t, Node *kv)
+{
+	Natural h;
+
+	h = getPos(kv, t);
+	SLIST_FOREACH(Node *k, hash(t)[h], sibl)
+		if (strcmp(cdata(kv), cdata(k)) == 0)
+			return (k);
+	return (NULL);		
+}
+
+Node *deleteFromTable(table *t, Node *kv)
+{
+	Natural h;
+
+	h = getPos(kv, t);
+	SLIST_FOREACH(Node *k, hash(t)[h], sibl)
+		;
+	return (NULL);
+}
+
+int main()
+{
+	Table *t = newTable(8);
+
+	
+}

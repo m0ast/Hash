@@ -10,11 +10,17 @@
 #include <limits.h>
 #define hash_(t) (t->_)
 #define len(t) (t->len)
-#define	key(k) (k->key)
-#define cdata(k) (cast(char *, k->data))
+#define	key(k) (k.key)
+#define cdata(k) (k.data)
 #define R(key, n) (cast(unsigned int, (key % n)))
 #define Q(key, bis, n) (cast(unsigned int, (((2 * (unsigned int)(key / n)) + 1) * bis) + (4 * (unsigned int)(key / n) * bis)))
 #define copyNode(dst, src) (memcpy(dst, src, sizeof(Node)))
+#define	insert(t, i, k)		(copyNode(hash_(t) + i, &k))
+#define compareNode(dst, src) (!memcmp(dst, src, sizeof(Node)))
+#define	isDummy(n) (compareNode(&n, &dummyNode))
+#define	setDummy(n)	(copyNode(&n, &dummyNode))
+typedef unsigned int Natural;
+
 
 typedef int64_t		integer;
 
@@ -36,12 +42,12 @@ typedef struct string
 	size_t	size;
 }				string_t;
 
-unsigned int	hash(char *data, size_t len, unsigned int seed)
+Natural	hash(char *data, size_t len, Natural seed)
 {
-	unsigned int	hash;
-	unsigned int	i;
+	Natural	hash;
+	Natural	i;
 
-	hash = seed ^ cast(unsigned int, len);
+	hash = seed ^ cast(Natural, len);
 	i = 0;
 	while (i < len)
 	{
@@ -61,7 +67,7 @@ Hash *newHash()
 typedef struct
 {
 	void *data;
-	unsigned int key;
+	Natural key;
 }		Node;
 
 typedef struct
@@ -70,9 +76,9 @@ typedef struct
 	Node	*_;
 }		Table;
 
-Node dummy_node = {
-	.data = NULL;
-	.key = 0;
+Node dummyNode = {
+	.data = NULL,
+	.key = 0
 };
 
 Table	*newTable(size_t len)
@@ -83,14 +89,15 @@ Table	*newTable(size_t len)
 	bzero(ptr, sizeof(Table));
 	if (ptr == NULL)
 		exit(EXIT_FAILURE);
-	ptr->_ = malloc(len * sizeof(Node));
-	bzero(ptr, sizeof(len * sizeof(Node));
+	hash_(ptr) = malloc(len * sizeof(Node));
+	for (int i = 0;i < len; i++)
+		setDummy(hash_(ptr)[i]);
 	ptr->len = len;
 	return (ptr);
 }
 
 
-int		getPos(Table *t, Node *kv)
+int		getPos(Table *t, Node kv)
 {
 	int hs;
 	
@@ -99,69 +106,69 @@ int		getPos(Table *t, Node *kv)
 		 s++)
 	{
 		printf("hs:s [%d][%d]\n", hs, s);
-		if (hash_(t)[hs] != NULL && strcmp(cdata(hash_(t)[hs]), cdata(kv)) == 0)
+		if (!isDummy(hash_(t)[hs]) && strcmp(cdata((hash_(t)[hs])), cdata(kv)) == 0)
 			return (hs);
 	}
 	return (-1);
 }
 
-Node	*deleteFromTable(Table *t, Node *kv)
+Node	deleteFromTable(Table *t, Node kv)
 {
 	int pos;
 	
 	if ((pos = getPos(t, kv)) != -1)
 	{
 		kv = hash_(t)[pos];
-		hash_(t)[pos] = NULL;
+		hash_(t)[pos] = dummyNode;
 		return (kv);
 	}
-	return (NULL);
+	return (dummyNode);
 }
 
-Node	*findIntoTable(Table *t, Node *kv)
+Node	findIntoTable(Table *t, Node kv)
 {
 	int pos;
 	
 	if ((pos = getPos(t, kv)) != -1)
 		return (hash_(t)[pos]);
-	return (NULL);
+	return (dummyNode);
 }
 
-unsigned int insertIntoTable(Table *t, Node *kv)
+Natural insertIntoTable(Table *t, Node kv)
 {
-	unsigned int s;
-	unsigned int hs;
+	Natural s;
+	Natural hs;
 
 	for (s = 0;
 		 !(hs = (R(key(kv), len(t)) + Q(key(kv), s, len(t))) % len(t), hs == R(key(kv), len(t))) != !s;
 		 s++)
 	{
 		printf("hs:s [%d][%d]\n", hs, s);
-		if (hash_(t)[hs] == NULL)
+		if (isDummy(hash_(t)[hs]))
 			break;
 	}
 //	printf("ok %d and %d and <%d>and <%d>\n", hs,  R(key(kv), len(t)), Q(key(kv), s, len(t)), s) ;
-	if (hash_(t)[hs] != NULL)
+	if (!isDummy(hash_(t)[hs]))
 		return (-1);
 	for (int i = 0; i < ((int)s - 2) ;i++)
 	{
-		unsigned int hi = (R(key(kv), len(t)) + Q(key(kv), i,len(t))) % len(t);
+		Natural hi = (R(key(kv), len(t)) + Q(key(kv), i,len(t))) % len(t);
 //		printf("okb <%d>\n", i);
 		for (int j = 1 ; i + j < s; j++)
 		{
-			unsigned int hij = (hi + Q(key(hash_(t)[hi]), j,len(t))) % len(t);
+			Natural hij = (hi + Q(key(hash_(t)[hi]), j,len(t))) % len(t);
 //			printf("okc %d:%d\n", i, j);
 //			printf("%d f %d\n", hi, hij);
-			if (hash_(t)[hij] == NULL)
+			if (isDummy(hash_(t)[hij]))
 			{
-				hash_(t)[hij] = hash_(t)[hi];
-				hash_(t)[hi] = kv;
+				insert(t, hij, kv);
+				insert(t, hi, kv);
 				//		printf("%d o %d\n", hi, hij);
 				return (hi);
 			}
 		}
 	}
-	hash_(t)[hs] = kv;
+	insert(t, hs, kv);
 //	printf("ok\n");
 	return (hs);
 }
@@ -170,11 +177,12 @@ void printTable(Table *t)
 {
 	for (int i = 0; i < len(t); i++)
 	{
-		printf("[%d]:[%x][%s]\n", i, (hash_(t)[i]) ? key(hash_(t)[i]) : 0, (hash_(t)[i]) ? cdata(hash_(t)[i]) : "NULL");
+		printf("[%d]:[%x][%s]\n", i, !isDummy((hash_(t)[i])) ? key(hash_(t)[i]) : 0, !isDummy((hash_(t)[i])) ? cdata(hash_(t)[i]) : "NULL");
 	}
 }
 
-Node *newNode(unsigned int key, void *data)
+/*
+Node newNode(Natural key, void *data)
 {
 	Node *n;
 
@@ -183,6 +191,7 @@ Node *newNode(unsigned int key, void *data)
 	n->data = data;
 	return (n);
 }
+*/
 
 void delNode(Node *n)
 {
@@ -193,14 +202,14 @@ void delNode(Node *n)
 void delTable(Table *t)
 {
 	for (int i = 0; i < len(t); i++)
-		delNode(hash_(t)[i]);
+		delNode(&hash_(t)[i]);
 	free(t);
 }
 
 int isFull(Table *t)
 {
 	for (int i = 0; i < len(t); i++)
-		if(hash_(t)[i] == NULL)
+		if(isDummy(hash_(t)[i]))
 			return (1);
 	return (0);
 }
@@ -218,7 +227,7 @@ void usage()
 		"\t\t[x] : exit\n");
 }
 
-void printNode(Node *n)
+void printNode(Node n)
 {
 	printf("[%x][%s]\n", key(n), cdata(n));
 }
@@ -242,7 +251,10 @@ int main(int argc, char **argv, char **envp)
 		{
 		case 'i':
 		{
-			Node *n = newNode(hash(str, strlen(str), 0), strdup(str));
+			Node n = (Node){
+				.key = hash(str, strlen(str), 0),
+				.data = strdup(str)
+			};
 			printNode(n);
 			if (insertIntoTable(t, n) == -1)
 			{
@@ -254,20 +266,28 @@ int main(int argc, char **argv, char **envp)
 		}
 		case 'd':
 		{
-			Node *n = newNode(hash(str, strlen(str), 0), strdup(str));
+			Node n = (Node){
+				.key = hash(str, strlen(str), 0),
+				.data = strdup(str)
+			};
 			printNode(n);
-			if (deleteFromTable(t, n) == NULL)
+			n = deleteFromTable(t, n);
+			if (isDummy(n))
 				printf("Not in table, is it OK ?\n");
+			else
+				free(cdata(n));
 			printTable(t);
 			break ;
 		}
 		case 'l':
 		{
-			Node *n, *m;
-			n = newNode(hash(str, strlen(str), 0), strdup(str));
+			Node n = (Node){
+				.key = hash(str, strlen(str), 0),
+				.data = strdup(str)
+			}, m;
 			printNode(n);
 			m = findIntoTable(t, n);
-			if (m == NULL)
+			if (isDummy(m))
 				printf("Not in table, is it OK ?\n");
 			else
 				printNode(m);
